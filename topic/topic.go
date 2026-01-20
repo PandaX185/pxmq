@@ -8,16 +8,16 @@ import (
 )
 
 type Topic struct {
-	name        string
+	Name        string
 	messages    []message.Message
 	subscribers map[*client.Subscriber]bool
-	mu          sync.Mutex
+	mu          sync.RWMutex
 	cv          *sync.Cond
 }
 
 func NewTopic(name string) *Topic {
 	t := &Topic{
-		name:        name,
+		Name:        name,
 		messages:    make([]message.Message, 0),
 		subscribers: make(map[*client.Subscriber]bool),
 	}
@@ -37,20 +37,20 @@ func (t *Topic) Consume(sub *client.Subscriber, replay bool) {
 	t.mu.Lock()
 
 	if replay {
-		sub.Offsets[t.name] = 0
+		sub.Offsets[t.Name] = 0
 	} else {
-		sub.Offsets[t.name] = len(t.messages)
+		sub.Offsets[t.Name] = len(t.messages)
 	}
 
 	for sub.Active.Load() {
-		for sub.Offsets[t.name] >= len(t.messages) {
+		for sub.Offsets[t.Name] >= len(t.messages) {
 			t.cv.Wait()
 		}
 
-		msg := t.messages[sub.Offsets[t.name]]
-		sub.Offsets[t.name]++
+		msg := t.messages[sub.Offsets[t.Name]]
+		sub.Offsets[t.Name]++
 
-		data := fmt.Sprintf("%s %s\n", t.name, msg.String())
+		data := fmt.Sprintf("%s %s\n", t.Name, msg.String())
 
 		t.mu.Unlock()
 		sub.WriteCh <- []byte(data)
@@ -79,4 +79,11 @@ func (t *Topic) Unsubscribe(sub *client.Subscriber) {
 	delete(t.subscribers, sub)
 	t.cv.Broadcast()
 	t.mu.Unlock()
+}
+
+func (t *Topic) HasSubscriber(sub *client.Subscriber) bool {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	_, exists := t.subscribers[sub]
+	return exists
 }
