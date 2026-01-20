@@ -29,11 +29,13 @@ func handleCommand(c *client.Subscriber, b *broker.Broker, cmd string, args []st
 		}
 
 		replay := false
+		topics := args
 		if len(args) >= 2 {
 			replay = args[len(args)-1] == "*"
+			topics = args[:len(args)-1]
 		}
 
-		for _, t := range args {
+		for _, t := range topics {
 			topic := b.GetOrCreateTopic(t)
 			topic.AddSubscriber(c)
 			go topic.Consume(c, replay)

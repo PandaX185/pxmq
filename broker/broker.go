@@ -1,6 +1,7 @@
 package broker
 
 import (
+	"pxmq/client"
 	"pxmq/topic"
 	"sync"
 )
@@ -35,4 +36,13 @@ func (b *Broker) GetTopic(name string) (*topic.Topic, bool) {
 
 	t, exists := b.topics[name]
 	return t, exists
+}
+
+func (b *Broker) UnsubscribeAll(subscriber *client.Subscriber) {
+	b.mu.RLock()
+	defer b.mu.RUnlock()
+
+	for _, t := range b.topics {
+		t.Unsubscribe(subscriber)
+	}
 }
