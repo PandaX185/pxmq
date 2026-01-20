@@ -2,21 +2,24 @@ package handler
 
 import (
 	"bufio"
+	"fmt"
 	"net"
 	"pxmq/broker"
 	"pxmq/client"
 	"pxmq/parser"
 )
 
-func HandleClient(conn *net.TCPConn, broker *broker.Broker, hub *client.ClientsHub) {
-	client := hub.AddClient(conn)
-	defer hub.RemoveClient(client.ID)
-
+func HandleClient(conn *net.TCPConn, broker *broker.Broker) {
 	sc := bufio.NewScanner(conn)
 	for sc.Scan() {
-		cmd, args := parser.Parse(sc.Text())
-		res := handleCommand(client, broker, cmd, args)
-
-		conn.Write([]byte(res))
+		line := sc.Text()
+		cmd, args := parser.Parse(line)
+		subscriber := client.NewSubscriber(conn)
+		response := handleCommand(subscriber, broker, cmd, args)
+		if _, err := conn.Write([]byte(response)); err != nil {
+			subscriber.Active = false
+			fmt.Println("Client disconnected: ", err)
+			return
+		}
 	}
 }

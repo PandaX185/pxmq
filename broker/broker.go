@@ -1,38 +1,38 @@
 package broker
 
 import (
-	"pxmq/queue"
+	"pxmq/topic"
 	"sync"
 )
 
 type Broker struct {
-	queues map[string]queue.Queue
+	topics map[string]*topic.Topic
 	mu     sync.RWMutex
 }
 
 func NewBroker() *Broker {
 	return &Broker{
-		queues: make(map[string]queue.Queue),
+		topics: make(map[string]*topic.Topic),
 	}
 }
 
-func (b *Broker) CreateInMemoryQueue(name string) queue.Queue {
+func (b *Broker) GetOrCreateTopic(name string) *topic.Topic {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
-	if q, exists := b.queues[name]; exists {
-		return q
+	if t, exists := b.topics[name]; exists {
+		return t
 	}
 
-	newQueue := queue.NewInMemoryQueue(name)
-	b.queues[name] = newQueue
-	return newQueue
+	t := topic.NewTopic(name)
+	b.topics[name] = t
+	return t
 }
 
-func (b *Broker) GetQueue(name string) (queue.Queue, bool) {
+func (b *Broker) GetTopic(name string) (*topic.Topic, bool) {
 	b.mu.RLock()
 	defer b.mu.RUnlock()
 
-	q, exists := b.queues[name]
-	return q, exists
+	t, exists := b.topics[name]
+	return t, exists
 }
