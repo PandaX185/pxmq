@@ -4,15 +4,18 @@ import (
 	"bufio"
 	"net"
 	"pxmq/broker"
-	"strings"
+	"pxmq/client"
+	"pxmq/parser"
 )
 
-func HandleClient(conn *net.TCPConn, broker *broker.Broker) {
+func HandleClient(conn *net.TCPConn, broker *broker.Broker, hub *client.ClientsHub) {
+	client := hub.AddClient(conn)
+	defer hub.RemoveClient(client.ID)
+
 	sc := bufio.NewScanner(conn)
 	for sc.Scan() {
-		line := strings.Split(sc.Text(), " ")
-
-		res := handleCommand(line[0], line[1:])
+		cmd, args := parser.Parse(sc.Text())
+		res := handleCommand(client, broker, cmd, args)
 
 		conn.Write([]byte(res))
 	}

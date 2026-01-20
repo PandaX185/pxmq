@@ -16,7 +16,7 @@ func NewBroker() *Broker {
 	}
 }
 
-func (b *Broker) CreateQ(name string) queue.Queue {
+func (b *Broker) CreateInMemoryQueue(name string) queue.Queue {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
@@ -24,12 +24,12 @@ func (b *Broker) CreateQ(name string) queue.Queue {
 		return q
 	}
 
-	newQueue := &queue.InMemoryQueue{Name: name}
+	newQueue := queue.NewInMemoryQueue(name)
 	b.queues[name] = newQueue
 	return newQueue
 }
 
-func (b *Broker) GetQ(name string) (queue.Queue, bool) {
+func (b *Broker) GetQueue(name string) (queue.Queue, bool) {
 	b.mu.RLock()
 	defer b.mu.RUnlock()
 

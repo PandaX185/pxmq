@@ -24,8 +24,8 @@ func NewClient(conn *net.TCPConn) *Client {
 	}
 }
 
-func (c *Client) Subscribe(queueName string) {
-	c.SubscribedQueues = append(c.SubscribedQueues, queueName)
+func (c *Client) Subscribe(queueNames ...string) {
+	c.SubscribedQueues = append(c.SubscribedQueues, queueNames...)
 }
 
 func (c *Client) Unsubscribe(queueName string) {

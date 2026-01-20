@@ -2,12 +2,14 @@ package main
 
 import (
 	"net"
+	"pxmq/broker"
+	"pxmq/client"
 	"pxmq/handler"
 )
 
 func main() {
-	// broker := broker.NewBroker()
-	// hub := client.NewClientsHub()
+	broker := broker.NewBroker()
+	hub := client.NewClientsHub()
 
 	srv, err := net.Listen("tcp", ":8888")
 	if err != nil {
@@ -27,6 +29,6 @@ func main() {
 			continue
 		}
 
-		go handler.HandleClient(tcpConn, nil)
+		go handler.HandleClient(tcpConn, broker, hub)
 	}
 }
