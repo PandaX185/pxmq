@@ -1,25 +1,37 @@
 package client
 
-import "sync"
+import (
+	"net"
+	"sync"
+)
 
 type ClientsHub struct {
-	clients map[int]*Client
+	clients map[string]*Client
 	mu      sync.RWMutex
 }
 
-func (hub *ClientsHub) AddClient(client *Client) {
-	hub.mu.Lock()
-	defer hub.mu.Unlock()
-	hub.clients[client.ID] = client
+func NewClientsHub() *ClientsHub {
+	return &ClientsHub{
+		clients: make(map[string]*Client),
+	}
 }
 
-func (hub *ClientsHub) RemoveClient(id int) {
+func (hub *ClientsHub) AddClient(conn *net.TCPConn) *Client {
+	hub.mu.Lock()
+	defer hub.mu.Unlock()
+
+	client := NewClient(conn)
+	hub.clients[client.ID] = client
+	return client
+}
+
+func (hub *ClientsHub) RemoveClient(id string) {
 	hub.mu.Lock()
 	defer hub.mu.Unlock()
 	delete(hub.clients, id)
 }
 
-func (hub *ClientsHub) GetClient(id int) *Client {
+func (hub *ClientsHub) GetClient(id string) *Client {
 	hub.mu.RLock()
 	defer hub.mu.RUnlock()
 	return hub.clients[id]

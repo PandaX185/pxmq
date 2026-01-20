@@ -2,17 +2,23 @@ package client
 
 import (
 	"net"
+
+	"github.com/gofrs/uuid"
 )
 
 type Client struct {
-	ID               int
+	ID               string
 	Conn             *net.TCPConn
 	SubscribedQueues []string
 }
 
-func NewClient(id int, conn *net.TCPConn) *Client {
+func NewClient(conn *net.TCPConn) *Client {
+	id, err := uuid.NewV4()
+	if err != nil {
+		id = uuid.Must(uuid.NewV4())
+	}
 	return &Client{
-		ID:               id,
+		ID:               id.String(),
 		Conn:             conn,
 		SubscribedQueues: []string{},
 	}
