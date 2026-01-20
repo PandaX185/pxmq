@@ -11,6 +11,12 @@ import (
 
 func HandleClient(conn *net.TCPConn, broker *broker.Broker) {
 	subscriber := client.NewSubscriber(conn)
+	defer func() {
+		subscriber.Active.Store(false)
+		broker.UnsubscribeAll(subscriber)
+		close(subscriber.WriteCh)
+		conn.Close()
+	}()
 
 	sc := bufio.NewScanner(conn)
 	for sc.Scan() {
@@ -20,12 +26,9 @@ func HandleClient(conn *net.TCPConn, broker *broker.Broker) {
 		response := handleCommand(subscriber, broker, cmd, args)
 
 		if _, err := conn.Write([]byte(response)); err != nil {
-			subscriber.Active = false
+			subscriber.Active.Store(false)
 			fmt.Println("Client disconnected: ", err)
 			return
 		}
 	}
-
-	subscriber.Active = false
-	broker.UnsubscribeAll(subscriber)
 }

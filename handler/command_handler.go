@@ -38,6 +38,7 @@ func handleCommand(c *client.Subscriber, b *broker.Broker, cmd string, args []st
 		for _, t := range topics {
 			topic := b.GetOrCreateTopic(t)
 			topic.AddSubscriber(c)
+			c.Subscribe(t)
 			go topic.Consume(c, replay)
 		}
 		return "OK\n"
@@ -47,6 +48,7 @@ func handleCommand(c *client.Subscriber, b *broker.Broker, cmd string, args []st
 		}
 
 		if t, exists := b.GetTopic(args[0]); exists {
+			c.Unsubscribe(args[0])
 			t.Unsubscribe(c)
 		}
 		return "OK\n"
