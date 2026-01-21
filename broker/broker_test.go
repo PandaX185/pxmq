@@ -1,6 +1,7 @@
 package broker
 
 import (
+	"fmt"
 	"pxmq/client"
 	"testing"
 )
@@ -85,5 +86,25 @@ func TestUnsubscribeAll(t *testing.T) {
 	// Check subscriber is removed
 	if topic.HasSubscriber(sub) {
 		t.Fatal("Subscriber not removed")
+	}
+}
+
+func TestConcurrentTopicCreation(t *testing.T) {
+	b := NewBroker()
+	done := make(chan bool, 10)
+
+	for i := 0; i < 10; i++ {
+		go func(id int) {
+			topicName := fmt.Sprintf("topic_%d", id)
+			topic := b.GetOrCreateTopic(topicName)
+			if topic.Name != topicName {
+				t.Errorf("Wrong topic name")
+			}
+			done <- true
+		}(i)
+	}
+
+	for i := 0; i < 10; i++ {
+		<-done
 	}
 }

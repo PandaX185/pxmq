@@ -1,6 +1,7 @@
 package client
 
 import (
+	"fmt"
 	"testing"
 )
 
@@ -55,4 +56,25 @@ func TestUnsubscribe(t *testing.T) {
 		t.Fatal("Topic not unsubscribed")
 	}
 	sub.mu.Unlock()
+}
+
+func TestConcurrentSubscribeUnsubscribe(t *testing.T) {
+	sub := &Subscriber{
+		SubscribedTopics: make(map[string]bool),
+	}
+
+	done := make(chan bool, 20)
+
+	for i := 0; i < 10; i++ {
+		go func(id int) {
+			topic := fmt.Sprintf("topic_%d", id)
+			sub.Subscribe(topic)
+			sub.Unsubscribe(topic)
+			done <- true
+		}(i)
+	}
+
+	for i := 0; i < 10; i++ {
+		<-done
+	}
 }
