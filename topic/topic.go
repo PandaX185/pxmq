@@ -50,22 +50,17 @@ func (t *Topic) Consume(sub *client.Subscriber, replay bool) {
 		msg := t.messages[sub.Offsets[t.Name]]
 		sub.Offsets[t.Name]++
 
-		data := fmt.Sprintf("MESSAGE %s %s\n", t.Name, msg.String())
+		data := fmt.Sprintf("MSG %s %d\n%s", t.Name, len(msg.Payload), msg.Payload)
 
 		t.mu.Unlock()
 		sub.WriteCh <- []byte(data)
 		t.mu.Lock()
-		t.Ack(sub, msg.ID)
 		if _, exists := t.subscribers[sub]; !exists {
 			t.mu.Unlock()
 			return
 		}
 	}
 	t.mu.Unlock()
-}
-
-func (t *Topic) Ack(sub *client.Subscriber, msg string) {
-	// Acknowledgment logic can be implemented here if needed
 }
 
 func (t *Topic) AddSubscriber(sub *client.Subscriber) {

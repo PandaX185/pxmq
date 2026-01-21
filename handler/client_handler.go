@@ -3,10 +3,12 @@ package handler
 import (
 	"bufio"
 	"fmt"
+	"io"
 	"net"
 	"pxmq/broker"
 	"pxmq/client"
 	"pxmq/parser"
+	"strings"
 )
 
 func HandleClient(conn net.Conn, broker *broker.Broker) {
@@ -18,12 +20,31 @@ func HandleClient(conn net.Conn, broker *broker.Broker) {
 		conn.Close()
 	}()
 
-	sc := bufio.NewScanner(conn)
-	for sc.Scan() {
-		line := sc.Text()
-		cmd, args := parser.Parse(line)
+	reader := bufio.NewReader(conn)
+	for {
+		cmd, err := parser.ParseCommand(reader)
+		if err != nil {
+			if err == io.EOF {
+				fmt.Println("Client disconnected")
+				return
+			}
+			if err.Error() == "empty line" {
+				continue
+			}
+			fmt.Printf("Parse error: %v\n", err)
+			response := fmt.Sprintf("-ERR Parse error: %v\n", err)
+			_, err := conn.Write([]byte(response))
+			if err != nil {
+				if strings.Contains(err.Error(), "use of closed network connection") {
+					return
+				}
+				fmt.Printf("Write error: %v\n", err)
+				return
+			}
+			continue
+		}
 
-		response := handleCommand(subscriber, broker, cmd, args)
+		response := handleCommand(subscriber, broker, cmd)
 
 		if _, err := conn.Write([]byte(response)); err != nil {
 			subscriber.Active.Store(false)

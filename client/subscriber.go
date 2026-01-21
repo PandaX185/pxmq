@@ -1,6 +1,7 @@
 package client
 
 import (
+	"fmt"
 	"net"
 	"sync"
 	"sync/atomic"
@@ -28,7 +29,10 @@ func NewSubscriber(conn net.Conn) *Subscriber {
 	go func() {
 		for data := range sub.WriteCh {
 			if _, err := conn.Write(data); err != nil {
+				fmt.Printf("Error writing to subscriber: %v\n", err)
 				return
+			} else {
+				fmt.Printf("Message sent to subscriber: %s\n", data)
 			}
 		}
 	}()

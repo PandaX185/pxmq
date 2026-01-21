@@ -67,24 +67,22 @@ The server listens on the specified port (default: 8888).
 
 ## Protocol
 
-Connect to the server using any TCP client (telnet, netcat, etc.):
-
-```bash
-telnet localhost 8888
-```
+pxmq uses a binary-safe TCP protocol with length-prefixed payloads.
 
 ### Commands
 
-- `pub <topic> <message>` - Publish a message to a topic
-- `sub <topic>` - Subscribe to a topic (receives new messages)
-- `sub <topic> *` - Subscribe to a topic with replay (receives old messages too)
-- `unsub <topic>` - Unsubscribe from a topic
+- `PUB <topic> <len>\n<payload>` - Publish a message to a topic
+- `SUB <topics> [*]\n` - Subscribe to topics (use `*` for replay of old messages)
+- `UNSUB <topics>\n` - Unsubscribe from topics
 
-### Responses
+### Server Responses
 
-- `OK` - Command successful
-- `MESSAGE <topic> <message>` - Incoming message
-- `ERROR <message>` - Command failed
+- `+OK\n` - Command successful
+- `-ERR <message>\n` - Command failed
+
+### Server Push
+
+- `MSG <topic> <len>\n<payload>` - Incoming message from subscribed topic
 
 ## Client Examples
 
@@ -100,6 +98,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"strings"
 )
 
 func main() {
@@ -111,7 +110,7 @@ func main() {
 	defer conn.Close()
 
 	// Send subscribe command
-	fmt.Fprintf(conn, "sub mytopic\n")
+	fmt.Fprintf(conn, "SUB mytopic\n")
 
 	// Read response
 	scanner := bufio.NewScanner(conn)
@@ -119,13 +118,27 @@ func main() {
 		fmt.Println("Response:", scanner.Text())
 	}
 
-	// Read messages
-	for scanner.Scan() {
-		fmt.Println("Message:", scanner.Text())
+	// Send publish command with length-prefixed payload
+	message := "Hello from Go!"
+	fmt.Fprintf(conn, "PUB mytopic %d\n%s", len(message), message)
+
+	// Read response
+	if scanner.Scan() {
+		fmt.Println("Response:", scanner.Text())
 	}
 
-	if err := scanner.Err(); err != nil {
-		fmt.Println("Error reading:", err)
+	// Read messages
+	for scanner.Scan() {
+		line := scanner.Text()
+		if strings.HasPrefix(line, "MSG ") {
+			// Parse MSG command
+			parts := strings.Split(line, " ")
+			if len(parts) >= 3 {
+				topic := parts[1]
+				// In real implementation, parse length and read payload
+				fmt.Printf("Received message on topic %s\n", topic)
+			}
+		}
 	}
 }
 ```
@@ -139,21 +152,21 @@ const client = net.createConnection({ port: 8888, host: 'localhost' }, () => {
   console.log('Connected to pxmq server');
 
   // Subscribe to a topic
-  client.write('sub mytopic\n');
-
-  // Read response
-  client.once('data', (data) => {
-    console.log('Response:', data.toString().trim());
-
-    // Publish a message after subscribing
-    setTimeout(() => {
-      client.write('pub mytopic "Hello from Node.js!"\n');
-    }, 100);
-  });
+  client.write('SUB mytopic\n');
 });
 
 client.on('data', (data) => {
-  console.log('Received:', data.toString().trim());
+  const message = data.toString();
+  if (message.startsWith('+OK')) {
+    console.log('Subscribed successfully');
+    // Publish a message
+    const payload = 'Hello from Node.js!';
+    client.write(`PUB mytopic ${payload.length}\n${payload}`);
+  } else if (message.startsWith('MSG ')) {
+    console.log('Received message:', message.trim());
+  } else if (message.startsWith('-ERR')) {
+    console.error('Error:', message.trim());
+  }
 });
 
 client.on('end', () => {
@@ -181,18 +194,24 @@ public class PxmqClient {
             PrintWriter out = new PrintWriter(socket.getOutputStream(), true);
 
             // Subscribe to topic
-            out.println("sub mytopic");
+            out.println("SUB mytopic");
             System.out.println("Response: " + in.readLine());
 
-            // Publish a message
-            Thread.sleep(1000);
-            out.println("pub mytopic \"Hello from Java!\"");
+            // Publish a message with length prefix
+            String message = "Hello from Java!";
+            out.println("PUB mytopic " + message.length());
+            out.println(message);
             System.out.println("Response: " + in.readLine());
 
             // Read messages
             String line;
             while ((line = in.readLine()) != null) {
-                System.out.println("Message: " + line);
+                if (line.startsWith("MSG ")) {
+                    // Parse MSG command - in real implementation, read the payload
+                    System.out.println("Received message: " + line);
+                } else {
+                    System.out.println("Response: " + line);
+                }
             }
 
         } catch (IOException | InterruptedException e) {

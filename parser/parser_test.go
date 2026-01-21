@@ -1,32 +1,54 @@
 package parser
 
 import (
+	"bufio"
 	"reflect"
+	"strings"
 	"testing"
 )
 
-func TestParse(t *testing.T) {
+func TestParseCommand(t *testing.T) {
 	tests := []struct {
-		input        string
-		expectedCmd  string
-		expectedArgs []string
+		input           string
+		expectedType    string
+		expectedArgs    []string
+		expectedPayload []byte
+		expectError     bool
 	}{
-		{"pub topic message", "pub", []string{"topic", "message"}},
-		{"sub topic", "sub", []string{"topic"}},
-		{"unsub topic", "unsub", []string{"topic"}},
-		{"pub topic \"message with spaces\"", "pub", []string{"topic", "message with spaces"}},
-		{"sub topic1 topic2 *", "sub", []string{"topic1", "topic2", "*"}},
-		{"", "", []string{}},
-		{"cmd", "", []string{}},
+		{"PUB topic 5\nhello", "PUB", []string{"topic"}, []byte("hello"), false},
+		{"SUB topic1 topic2\n", "SUB", []string{"topic1", "topic2"}, nil, false},
+		{"SUB topic *\n", "SUB", []string{"topic", "*"}, nil, false},
+		{"UNSUB topic\n", "UNSUB", []string{"topic"}, nil, false},
+		{"PUB topic\n", "", nil, nil, true},
+		{"INVALID cmd\n", "", nil, nil, true},
 	}
 
 	for _, test := range tests {
-		cmd, args := Parse(test.input)
-		if cmd != test.expectedCmd {
-			t.Errorf("For input %q, expected cmd %q, got %q", test.input, test.expectedCmd, cmd)
+		reader := bufio.NewReader(strings.NewReader(test.input))
+		cmd, err := ParseCommand(reader)
+
+		if test.expectError {
+			if err == nil {
+				t.Errorf("For input %q, expected error but got none", test.input)
+			}
+			continue
 		}
-		if !reflect.DeepEqual(args, test.expectedArgs) {
-			t.Errorf("For input %q, expected args %v, got %v", test.input, test.expectedArgs, args)
+
+		if err != nil {
+			t.Errorf("For input %q, unexpected error: %v", test.input, err)
+			continue
+		}
+
+		if cmd.Type != test.expectedType {
+			t.Errorf("For input %q, expected type %q, got %q", test.input, test.expectedType, cmd.Type)
+		}
+
+		if !reflect.DeepEqual(cmd.Args, test.expectedArgs) {
+			t.Errorf("For input %q, expected args %v, got %v", test.input, test.expectedArgs, cmd.Args)
+		}
+
+		if !reflect.DeepEqual(cmd.Payload, test.expectedPayload) {
+			t.Errorf("For input %q, expected payload %v, got %v", test.input, test.expectedPayload, cmd.Payload)
 		}
 	}
 }

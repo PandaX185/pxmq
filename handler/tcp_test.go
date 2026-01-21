@@ -2,9 +2,9 @@ package handler
 
 import (
 	"bufio"
+	"fmt"
 	"net"
 	"pxmq/broker"
-	"strings"
 	"testing"
 	"time"
 )
@@ -21,8 +21,10 @@ func TestTCPCommunication(t *testing.T) {
 	// Start HandleClient in goroutine
 	go HandleClient(serverConn, b)
 
-	// Client sends PUBLISH
-	_, err := clientConn.Write([]byte("pub test_topic test_message\n"))
+	// Client sends PUBLISH with length-prefixed payload
+	message := "test_message"
+	payload := fmt.Sprintf("PUB test_topic %d\n%s", len(message), message)
+	_, err := clientConn.Write([]byte(payload))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -33,8 +35,8 @@ func TestTCPCommunication(t *testing.T) {
 		t.Fatal("No response")
 	}
 	response := scanner.Text()
-	if response != "OK" {
-		t.Errorf("Expected OK, got %s", response)
+	if response != "+OK" {
+		t.Errorf("Expected +OK, got %s", response)
 	}
 
 	// Another pipe for subscriber
@@ -45,7 +47,7 @@ func TestTCPCommunication(t *testing.T) {
 	go HandleClient(serverConn2, b)
 
 	// Send SUBSCRIBE
-	_, err = clientConn2.Write([]byte("sub test_topic\n"))
+	_, err = clientConn2.Write([]byte("SUB test_topic\n"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -56,12 +58,14 @@ func TestTCPCommunication(t *testing.T) {
 		t.Fatal("No response")
 	}
 	response2 := scanner2.Text()
-	if response2 != "OK" {
-		t.Errorf("Expected OK, got %s", response2)
+	if response2 != "+OK" {
+		t.Errorf("Expected +OK, got %s", response2)
 	}
 
 	// Publish another message
-	_, err = clientConn.Write([]byte("pub test_topic another_message\n"))
+	message2 := "another_message"
+	payload2 := fmt.Sprintf("PUB test_topic %d\n%s", len(message2), message2)
+	_, err = clientConn.Write([]byte(payload2))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -71,17 +75,26 @@ func TestTCPCommunication(t *testing.T) {
 		t.Fatal("No response")
 	}
 	response = scanner.Text()
-	if response != "OK" {
-		t.Errorf("Expected OK, got %s", response)
+	if response != "+OK" {
+		t.Errorf("Expected +OK, got %s", response)
 	}
 
 	// Subscriber should receive message
 	clientConn2.SetReadDeadline(time.Now().Add(1 * time.Second))
 	if scanner2.Scan() {
-		msg := scanner2.Text()
-		expected := "MESSAGE test_topic another_message"
-		if !strings.Contains(msg, expected) {
-			t.Errorf("Expected message containing %s, got %s", expected, msg)
+		msgLine := scanner2.Text()
+		expectedLine := fmt.Sprintf("MSG test_topic %d", len(message2))
+		if msgLine != expectedLine {
+			t.Errorf("Expected MSG line %q, got %q", expectedLine, msgLine)
+		}
+		// Read the payload
+		if scanner2.Scan() {
+			payload := scanner2.Text()
+			if payload != message2 {
+				t.Errorf("Expected payload %q, got %q", message2, payload)
+			}
+		} else {
+			t.Error("No payload received")
 		}
 	} else {
 		t.Error("No message received by subscriber")
