@@ -66,7 +66,9 @@ func handleCommand(c *client.Subscriber, b *broker.Broker, cmd *parser.Command) 
 			return "-ERR Invalid message ID\n"
 		}
 
-		c.Ack(topicName, msgID)
+		if err := c.Ack(topicName, msgID); err != nil {
+			return fmt.Sprintf("-ERR %s\n", err.Error())
+		}
 		return "+OK\n"
 	default:
 		return fmt.Sprintf("-ERR Unknown command: %s\n", cmd.Type)

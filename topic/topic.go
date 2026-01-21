@@ -120,8 +120,9 @@ func (t *Topic) Consume(sub *client.Subscriber, replay bool) {
 
 func (t *Topic) AddSubscriber(sub *client.Subscriber) {
 	t.mu.Lock()
+	defer t.mu.Unlock()
+
 	t.subscribers[sub] = true
-	t.mu.Unlock()
 }
 
 func (t *Topic) Unsubscribe(sub *client.Subscriber) {

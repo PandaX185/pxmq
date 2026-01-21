@@ -45,6 +45,7 @@ func NewSubscriber(conn net.Conn) *Subscriber {
 func (s *Subscriber) Subscribe(topic string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+
 	s.SubscribedTopics[topic] = true
 }
 
@@ -54,10 +55,15 @@ func (s *Subscriber) Unsubscribe(topic string) {
 	delete(s.SubscribedTopics, topic)
 }
 
-func (s *Subscriber) Ack(topic string, msgID uint64) {
+func (s *Subscriber) Ack(topic string, msgID uint64) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if msgID > s.LastAckedID[topic] {
-		s.LastAckedID[topic] = msgID
+
+	lastAcked, exists := s.LastAckedID[topic]
+	if exists && msgID <= lastAcked {
+		return fmt.Errorf("cannot acknowledge message ID %d, last acknowledged ID for topic %s is %d", msgID, topic, lastAcked)
 	}
+
+	s.LastAckedID[topic] = msgID
+	return nil
 }
