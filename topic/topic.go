@@ -10,6 +10,7 @@ import (
 	"pxmq/client"
 	"pxmq/message"
 	"sync"
+	"time"
 )
 
 type Topic struct {
@@ -41,6 +42,17 @@ func NewTopic(name string, dataDir string) *Topic {
 	if err != nil {
 		panic(fmt.Sprintf("Failed to open WAL file for topic %s: %v", name, err))
 	}
+
+	go func() {
+		ticker := time.NewTicker(60 * 60 * time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ticker.C:
+				t.Prune()
+			}
+		}
+	}()
 
 	return t
 }
@@ -177,5 +189,78 @@ func (t *Topic) Close() error {
 	if t.walFile != nil {
 		return t.walFile.Close()
 	}
+	return nil
+}
+
+func (t *Topic) Prune() error {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	minAckedID := uint64(0)
+	first := true
+	for sub := range t.subscribers {
+		if ackedID, exists := sub.LastAckedID[t.Name]; exists {
+			if first || ackedID < minAckedID {
+				minAckedID = ackedID
+				first = false
+			}
+		}
+	}
+	if first {
+		return nil
+	}
+
+	keepIndex := 0
+	for i, msg := range t.messages {
+		if msg.ID > minAckedID {
+			keepIndex = i
+			break
+		}
+	}
+
+	if keepIndex == 0 && len(t.messages) > 0 && t.messages[0].ID <= minAckedID {
+		keepIndex = len(t.messages)
+	}
+
+	tmpFile := t.walPath + ".tmp"
+	tmp, err := os.Create(tmpFile)
+	if err != nil {
+		return err
+	}
+	defer tmp.Close()
+
+	for i := keepIndex; i < len(t.messages); i++ {
+		msg := &t.messages[i]
+		if err := binary.Write(tmp, binary.BigEndian, msg.ID); err != nil {
+			return err
+		}
+		payloadLen := uint32(len(msg.Payload))
+		if err := binary.Write(tmp, binary.BigEndian, payloadLen); err != nil {
+			return err
+		}
+		if _, err := tmp.Write(msg.Payload); err != nil {
+			return err
+		}
+	}
+
+	if err := tmp.Sync(); err != nil {
+		return err
+	}
+
+	if t.walFile != nil {
+		t.walFile.Close()
+	}
+
+	if err := os.Rename(tmpFile, t.walPath); err != nil {
+		return err
+	}
+
+	t.walFile, err = os.OpenFile(t.walPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+	if err != nil {
+		return err
+	}
+
+	t.messages = t.messages[keepIndex:]
+
 	return nil
 }

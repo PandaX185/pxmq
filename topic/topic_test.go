@@ -3,6 +3,7 @@ package topic
 import (
 	"pxmq/client"
 	"testing"
+	"time"
 )
 
 func TestNewTopic(t *testing.T) {
@@ -141,4 +142,105 @@ func TestConcurrentOperations(t *testing.T) {
 	// Wait for completion
 	<-done
 	<-done
+}
+
+func TestPrune(t *testing.T) {
+	dataDir := t.TempDir()
+	topic := NewTopic("test", dataDir)
+
+	// Publish some messages
+	topic.Publish([]byte("msg1"))
+	topic.Publish([]byte("msg2"))
+	topic.Publish([]byte("msg3"))
+
+	// Check messages are there
+	topic.mu.Lock()
+	if len(topic.messages) != 3 {
+		t.Errorf("Expected 3 messages, got %d", len(topic.messages))
+	}
+	topic.mu.Unlock()
+
+	// Create subscribers
+	sub1 := &client.Subscriber{
+		Offsets:          make(map[string]int),
+		SubscribedTopics: make(map[string]bool),
+		LastAckedID:      make(map[string]uint64),
+	}
+	sub1.Active.Store(true)
+	sub1.LastAckedID["test"] = 1 // Acked msg1
+
+	sub2 := &client.Subscriber{
+		Offsets:          make(map[string]int),
+		SubscribedTopics: make(map[string]bool),
+		LastAckedID:      make(map[string]uint64),
+	}
+	sub2.Active.Store(true)
+	sub2.LastAckedID["test"] = 2 // Acked msg1 and msg2
+
+	// Add subscribers
+	topic.AddSubscriber(sub1)
+	topic.AddSubscriber(sub2)
+
+	// Prune
+	err := topic.Prune()
+	if err != nil {
+		t.Errorf("Prune failed: %v", err)
+	}
+
+	// Check that messages with ID <= minAckedID (1) are pruned
+	topic.mu.Lock()
+	defer topic.mu.Unlock()
+	if len(topic.messages) != 2 {
+		t.Errorf("Expected 2 messages after prune, got %d", len(topic.messages))
+	}
+	if len(topic.messages) > 0 && topic.messages[0].ID != 2 {
+		t.Errorf("Expected first remaining message ID 2, got %d", topic.messages[0].ID)
+	}
+	if len(topic.messages) > 1 && topic.messages[1].ID != 3 {
+		t.Errorf("Expected second remaining message ID 3, got %d", topic.messages[1].ID)
+	}
+}
+
+func TestPeriodicPrune(t *testing.T) {
+	dataDir := t.TempDir()
+	topic := NewTopic("test", dataDir)
+
+	// Publish some messages
+	topic.Publish([]byte("msg1"))
+	topic.Publish([]byte("msg2"))
+	topic.Publish([]byte("msg3"))
+
+	// Create subscribers
+	sub1 := &client.Subscriber{
+		Offsets:          make(map[string]int),
+		SubscribedTopics: make(map[string]bool),
+		LastAckedID:      make(map[string]uint64),
+	}
+	sub1.Active.Store(true)
+	sub1.LastAckedID["test"] = 1
+
+	sub2 := &client.Subscriber{
+		Offsets:          make(map[string]int),
+		SubscribedTopics: make(map[string]bool),
+		LastAckedID:      make(map[string]uint64),
+	}
+	sub2.Active.Store(true)
+	sub2.LastAckedID["test"] = 2
+
+	// Add subscribers
+	topic.AddSubscriber(sub1)
+	topic.AddSubscriber(sub2)
+
+	// Wait for periodic prune (15 seconds + buffer)
+	time.Sleep(16 * time.Second)
+
+	// Check that messages are pruned
+	topic.mu.Lock()
+	defer topic.mu.Unlock()
+	if len(topic.messages) != 2 {
+		t.Errorf("Expected 2 messages after periodic prune, got %d", len(topic.messages))
+	}
+	if len(topic.messages) > 0 && topic.messages[0].ID != 2 {
+		t.Errorf("Expected first remaining message ID 2, got %d", topic.messages[0].ID)
+	}
 }
