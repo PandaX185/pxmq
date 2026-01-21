@@ -12,13 +12,32 @@ A lightweight, TCP-based publish-subscribe message queue system written in Go.
 
 ## Installation
 
+### From Source
+
 ```bash
 git clone https://github.com/yourusername/pxmq.git
 cd pxmq
 go build
 ```
 
+### Using Docker
+
+```bash
+git clone https://github.com/yourusername/pxmq.git
+cd pxmq
+docker build -t pxmq .
+docker run -p 8888:8888 pxmq
+```
+
+To use a different port:
+
+```bash
+docker run -p 9999:9999 -e PORT=9999 pxmq
+```
+
 ## Usage
+
+### Running Locally
 
 Start the server:
 
@@ -30,6 +49,18 @@ Or specify a custom port:
 
 ```bash
 ./pxmq -port 9999
+```
+
+### Running with Docker
+
+```bash
+docker run -p 8888:8888 pxmq
+```
+
+Or with custom port:
+
+```bash
+docker run -p 9999:9999 -e PORT=9999 pxmq
 ```
 
 The server listens on the specified port (default: 8888).
@@ -55,25 +86,120 @@ telnet localhost 8888
 - `MESSAGE <topic> <message>` - Incoming message
 - `ERROR <message>` - Command failed
 
-## Example
+## Client Examples
 
-```bash
-# Terminal 1: Start server
-./pxmq
-pxmq server listening on port 8888
+Here are examples of how to connect to pxmq from different programming languages. Each example shows how to subscribe to a topic and publish a message. Since pxmq uses a simple TCP-based protocol, you can implement clients in any language that supports TCP sockets.
 
-# Terminal 2: Connect subscriber
-telnet localhost 8888
-sub mytopic
-OK
+### Go Client
 
-# Terminal 3: Connect publisher
-telnet localhost 8888
-pub mytopic "Hello World"
-OK
+```go
+package main
 
-# Terminal 2 will receive:
-MESSAGE mytopic Hello World
+import (
+	"bufio"
+	"fmt"
+	"net"
+	"os"
+)
+
+func main() {
+	conn, err := net.Dial("tcp", "localhost:8888")
+	if err != nil {
+		fmt.Println("Error connecting:", err)
+		os.Exit(1)
+	}
+	defer conn.Close()
+
+	// Send subscribe command
+	fmt.Fprintf(conn, "sub mytopic\n")
+
+	// Read response
+	scanner := bufio.NewScanner(conn)
+	if scanner.Scan() {
+		fmt.Println("Response:", scanner.Text())
+	}
+
+	// Read messages
+	for scanner.Scan() {
+		fmt.Println("Message:", scanner.Text())
+	}
+
+	if err := scanner.Err(); err != nil {
+		fmt.Println("Error reading:", err)
+	}
+}
+```
+
+### Node.js Client
+
+```javascript
+const net = require('net');
+
+const client = net.createConnection({ port: 8888, host: 'localhost' }, () => {
+  console.log('Connected to pxmq server');
+
+  // Subscribe to a topic
+  client.write('sub mytopic\n');
+
+  // Read response
+  client.once('data', (data) => {
+    console.log('Response:', data.toString().trim());
+
+    // Publish a message after subscribing
+    setTimeout(() => {
+      client.write('pub mytopic "Hello from Node.js!"\n');
+    }, 100);
+  });
+});
+
+client.on('data', (data) => {
+  console.log('Received:', data.toString().trim());
+});
+
+client.on('end', () => {
+  console.log('Disconnected from server');
+});
+
+client.on('error', (err) => {
+  console.error('Connection error:', err);
+});
+```
+
+### Java Client
+
+```java
+import java.io.*;
+import java.net.*;
+
+public class PxmqClient {
+    public static void main(String[] args) {
+        try {
+            Socket socket = new Socket("localhost", 8888);
+            System.out.println("Connected to pxmq server");
+
+            BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+            PrintWriter out = new PrintWriter(socket.getOutputStream(), true);
+
+            // Subscribe to topic
+            out.println("sub mytopic");
+            System.out.println("Response: " + in.readLine());
+
+            // Publish a message
+            Thread.sleep(1000);
+            out.println("pub mytopic \"Hello from Java!\"");
+            System.out.println("Response: " + in.readLine());
+
+            // Read messages
+            String line;
+            while ((line = in.readLine()) != null) {
+                System.out.println("Message: " + line);
+            }
+
+        } catch (IOException | InterruptedException e) {
+            e.printStackTrace();
+        }
+    }
+}
 ```
 
 ## Testing
