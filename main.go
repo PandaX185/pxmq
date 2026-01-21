@@ -1,19 +1,27 @@
 package main
 
 import (
+	"flag"
+	"fmt"
 	"net"
 	"pxmq/broker"
 	"pxmq/handler"
 )
 
 func main() {
+	port := flag.String("port", "8888", "Port to listen on")
+	flag.Parse()
+
 	broker := broker.NewBroker()
 
-	srv, err := net.Listen("tcp", ":8888")
+	addr := fmt.Sprintf(":%s", *port)
+	srv, err := net.Listen("tcp", addr)
 	if err != nil {
 		panic(err)
 	}
 	defer srv.Close()
+
+	fmt.Printf("pxmq server listening on port %s\n", *port)
 
 	for {
 		conn, err := srv.Accept()

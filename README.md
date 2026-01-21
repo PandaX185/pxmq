@@ -26,7 +26,13 @@ Start the server:
 ./pxmq
 ```
 
-The server listens on port 8888 by default.
+Or specify a custom port:
+
+```bash
+./pxmq -port 9999
+```
+
+The server listens on the specified port (default: 8888).
 
 ## Protocol
 
@@ -54,6 +60,7 @@ telnet localhost 8888
 ```bash
 # Terminal 1: Start server
 ./pxmq
+pxmq server listening on port 8888
 
 # Terminal 2: Connect subscriber
 telnet localhost 8888
