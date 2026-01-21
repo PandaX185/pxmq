@@ -221,6 +221,60 @@ public class PxmqClient {
 }
 ```
 
+### Python Client
+
+```python
+import socket
+import threading
+import time
+
+def receive_messages(sock):
+    buffer = ""
+    while True:
+        try:
+            data = sock.recv(1024).decode('utf-8')
+            if not data:
+                break
+            buffer += data
+            while '\n' in buffer:
+                line, buffer = buffer.split('\n', 1)
+                if line.startswith('+OK'):
+                    print('Subscribed successfully')
+                    # Publish a message
+                    payload = 'Hello from Python!'
+                    sock.sendall(f'PUB mytopic {len(payload)}\n{payload}'.encode('utf-8'))
+                elif line.startswith('MSG '):
+                    print('Received message:', line.strip())
+                elif line.startswith('-ERR'):
+                    print('Error:', line.strip())
+        except Exception as e:
+            print('Error receiving data:', e)
+            break
+
+def main():
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    try:
+        sock.connect(('localhost', 8888))
+        print('Connected to pxmq server')
+
+        # Start thread to receive messages
+        threading.Thread(target=receive_messages, args=(sock,), daemon=True).start()
+
+        # Subscribe to topic
+        sock.sendall(b'SUB mytopic\n')
+
+        # Keep the connection alive
+        while True:
+            time.sleep(1)
+    except KeyboardInterrupt:
+        print('Disconnecting...')
+    finally:
+        sock.close()
+
+if __name__ == '__main__':
+    main()
+```
+
 ## Testing
 
 Run the test suite:
