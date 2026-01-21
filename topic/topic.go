@@ -2,6 +2,7 @@ package topic
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/binary"
 	"fmt"
 	"io"
@@ -27,6 +28,9 @@ type Topic struct {
 	dataDir         string
 	activeSegmentID uint64
 	maxSegmentSize  int64
+	writeBuffer     *bytes.Buffer
+	bufferMu        sync.Mutex
+	flushInterval   time.Duration
 }
 
 func NewTopic(name string, dataDir string) *Topic {
@@ -37,6 +41,8 @@ func NewTopic(name string, dataDir string) *Topic {
 		dataDir:        dataDir,
 		nextMsgID:      1,
 		maxSegmentSize: 64 * 1024 * 1024,
+		writeBuffer:    &bytes.Buffer{},
+		flushInterval:  10 * time.Second,
 	}
 	t.cv = sync.NewCond(&t.mu)
 
@@ -48,6 +54,8 @@ func NewTopic(name string, dataDir string) *Topic {
 	t.loadSegments()
 
 	t.openActiveSegment()
+
+	go t.periodicFlush()
 
 	go func() {
 		ticker := time.NewTicker(60 * 60 * time.Second)
@@ -76,6 +84,39 @@ func (t *Topic) Publish(payload []byte) {
 
 	t.messages = append(t.messages, *msg)
 	t.cv.Broadcast()
+}
+
+func (t *Topic) periodicFlush() {
+	ticker := time.NewTicker(t.flushInterval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			t.flushBuffer()
+		}
+	}
+}
+
+func (t *Topic) flushBuffer() {
+	t.bufferMu.Lock()
+	defer t.bufferMu.Unlock()
+
+	if t.writeBuffer.Len() == 0 {
+		return
+	}
+
+	if _, err := t.activeSegment.Write(t.writeBuffer.Bytes()); err != nil {
+		fmt.Printf("Error flushing buffer to disk: %v\n", err)
+		return
+	}
+
+	if err := t.activeSegment.Sync(); err != nil {
+		fmt.Printf("Error syncing to disk: %v\n", err)
+		return
+	}
+
+	t.writeBuffer.Reset()
 }
 
 func (t *Topic) Consume(sub *client.Subscriber, replay bool) {
@@ -218,23 +259,47 @@ func (t *Topic) openActiveSegment() {
 }
 
 func (t *Topic) appendToActiveSegment(msg *message.Message) error {
+	t.bufferMu.Lock()
+	defer t.bufferMu.Unlock()
+
 	if t.shouldRotateSegment() {
+		if err := t.flushBufferNoLock(); err != nil {
+			return fmt.Errorf("failed to flush buffer before rotation: %w", err)
+		}
 		if err := t.rotateSegment(); err != nil {
 			return fmt.Errorf("failed to rotate segment: %w", err)
 		}
 	}
 
-	if err := binary.Write(t.activeSegment, binary.BigEndian, msg.ID); err != nil {
+	if err := binary.Write(t.writeBuffer, binary.BigEndian, msg.ID); err != nil {
 		return err
 	}
 	payloadLen := uint32(len(msg.Payload))
-	if err := binary.Write(t.activeSegment, binary.BigEndian, payloadLen); err != nil {
+	if err := binary.Write(t.writeBuffer, binary.BigEndian, payloadLen); err != nil {
 		return err
 	}
-	if _, err := t.activeSegment.Write(msg.Payload); err != nil {
+	if _, err := t.writeBuffer.Write(msg.Payload); err != nil {
 		return err
 	}
-	return t.activeSegment.Sync()
+
+	return nil
+}
+
+func (t *Topic) flushBufferNoLock() error {
+	if t.writeBuffer.Len() == 0 {
+		return nil
+	}
+
+	if _, err := t.activeSegment.Write(t.writeBuffer.Bytes()); err != nil {
+		return err
+	}
+
+	if err := t.activeSegment.Sync(); err != nil {
+		return err
+	}
+
+	t.writeBuffer.Reset()
+	return nil
 }
 
 func (t *Topic) shouldRotateSegment() bool {
@@ -265,6 +330,8 @@ func (t *Topic) rotateSegment() error {
 }
 
 func (t *Topic) Close() error {
+	t.flushBuffer()
+
 	if t.activeSegment != nil {
 		return t.activeSegment.Close()
 	}
@@ -304,6 +371,8 @@ func (t *Topic) Prune() error {
 	if keepIndex == 0 {
 		return nil
 	}
+
+	t.flushBuffer()
 
 	if t.activeSegment != nil {
 		t.activeSegment.Close()
