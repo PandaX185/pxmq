@@ -7,13 +7,15 @@ import (
 )
 
 type Broker struct {
-	topics map[string]*topic.Topic
-	mu     sync.RWMutex
+	topics  map[string]*topic.Topic
+	mu      sync.RWMutex
+	dataDir string
 }
 
-func NewBroker() *Broker {
+func NewBroker(dataDir string) *Broker {
 	return &Broker{
-		topics: make(map[string]*topic.Topic),
+		topics:  make(map[string]*topic.Topic),
+		dataDir: dataDir,
 	}
 }
 
@@ -25,7 +27,7 @@ func (b *Broker) GetOrCreateTopic(name string) *topic.Topic {
 		return t
 	}
 
-	t := topic.NewTopic(name)
+	t := topic.NewTopic(name, b.dataDir)
 	b.topics[name] = t
 	return t
 }
@@ -45,4 +47,16 @@ func (b *Broker) UnsubscribeAll(subscriber *client.Subscriber) {
 	for _, t := range b.topics {
 		t.Unsubscribe(subscriber)
 	}
+}
+
+func (b *Broker) Close() error {
+	b.mu.RLock()
+	defer b.mu.RUnlock()
+
+	for _, t := range b.topics {
+		if err := t.Close(); err != nil {
+			return err
+		}
+	}
+	return nil
 }

@@ -7,7 +7,8 @@ import (
 )
 
 func TestNewBroker(t *testing.T) {
-	b := NewBroker()
+	dataDir := t.TempDir()
+	b := NewBroker(dataDir)
 	if b == nil {
 		t.Fatal("NewBroker returned nil")
 	}
@@ -17,7 +18,8 @@ func TestNewBroker(t *testing.T) {
 }
 
 func TestGetOrCreateTopic(t *testing.T) {
-	b := NewBroker()
+	dataDir := t.TempDir()
+	b := NewBroker(dataDir)
 	topicName := "test_topic"
 
 	// First call should create
@@ -37,7 +39,8 @@ func TestGetOrCreateTopic(t *testing.T) {
 }
 
 func TestGetTopic(t *testing.T) {
-	b := NewBroker()
+	dataDir := t.TempDir()
+	b := NewBroker(dataDir)
 	topicName := "test_topic"
 
 	// Topic doesn't exist
@@ -60,7 +63,8 @@ func TestGetTopic(t *testing.T) {
 }
 
 func TestUnsubscribeAll(t *testing.T) {
-	b := NewBroker()
+	dataDir := t.TempDir()
+	b := NewBroker(dataDir)
 	topicName := "test_topic"
 	topic := b.GetOrCreateTopic(topicName)
 
@@ -69,6 +73,7 @@ func TestUnsubscribeAll(t *testing.T) {
 	sub := &client.Subscriber{
 		Offsets:          make(map[string]int),
 		SubscribedTopics: make(map[string]bool),
+		LastAckedID:      make(map[string]uint64),
 	}
 	sub.Active.Store(true)
 
@@ -90,7 +95,8 @@ func TestUnsubscribeAll(t *testing.T) {
 }
 
 func TestConcurrentTopicCreation(t *testing.T) {
-	b := NewBroker()
+	dataDir := t.TempDir()
+	b := NewBroker(dataDir)
 	done := make(chan bool, 10)
 
 	for i := 0; i < 10; i++ {

@@ -1,20 +1,18 @@
 package message
 
 import (
-	"fmt"
-	"math/rand"
 	"time"
 )
 
 type Message struct {
-	ID        string
+	ID        uint64
 	Payload   []byte
 	timestamp time.Time
 }
 
-func NewMessage(payload []byte) *Message {
+func NewMessage(id uint64, payload []byte) *Message {
 	return &Message{
-		ID:        fmt.Sprintf("%d%d", time.Now().UnixNano(), rand.Intn(9)),
+		ID:        id,
 		Payload:   payload,
 		timestamp: time.Now(),
 	}

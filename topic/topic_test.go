@@ -2,13 +2,13 @@ package topic
 
 import (
 	"pxmq/client"
-	"pxmq/message"
 	"testing"
 )
 
 func TestNewTopic(t *testing.T) {
 	name := "test_topic"
-	topic := NewTopic(name)
+	dataDir := t.TempDir()
+	topic := NewTopic(name, dataDir)
 	if topic == nil {
 		t.Fatal("NewTopic returned nil")
 	}
@@ -18,10 +18,12 @@ func TestNewTopic(t *testing.T) {
 }
 
 func TestAddSubscriber(t *testing.T) {
-	topic := NewTopic("test")
+	dataDir := t.TempDir()
+	topic := NewTopic("test", dataDir)
 	sub := &client.Subscriber{
 		Offsets:          make(map[string]int),
 		SubscribedTopics: make(map[string]bool),
+		LastAckedID:      make(map[string]uint64),
 	}
 	sub.Active.Store(true)
 
@@ -32,10 +34,12 @@ func TestAddSubscriber(t *testing.T) {
 }
 
 func TestUnsubscribe(t *testing.T) {
-	topic := NewTopic("test")
+	dataDir := t.TempDir()
+	topic := NewTopic("test", dataDir)
 	sub := &client.Subscriber{
 		Offsets:          make(map[string]int),
 		SubscribedTopics: make(map[string]bool),
+		LastAckedID:      make(map[string]uint64),
 	}
 	sub.Active.Store(true)
 
@@ -51,10 +55,9 @@ func TestUnsubscribe(t *testing.T) {
 }
 
 func TestPublish(t *testing.T) {
-	topic := NewTopic("test")
-	msg := *message.NewMessage([]byte("test message"))
-
-	topic.Publish(msg)
+	dataDir := t.TempDir()
+	topic := NewTopic("test", dataDir)
+	topic.Publish([]byte("test message"))
 
 	// Check if message is added
 	topic.mu.Lock()
@@ -65,7 +68,8 @@ func TestPublish(t *testing.T) {
 }
 
 func TestFanOut(t *testing.T) {
-	topic := NewTopic("test")
+	dataDir := t.TempDir()
+	topic := NewTopic("test", dataDir)
 
 	// Create multiple subscribers
 	numSubs := 3
@@ -75,6 +79,7 @@ func TestFanOut(t *testing.T) {
 		sub := &client.Subscriber{
 			Offsets:          make(map[string]int),
 			SubscribedTopics: make(map[string]bool),
+			LastAckedID:      make(map[string]uint64),
 		}
 		sub.Active.Store(true)
 		subs[i] = sub
@@ -89,8 +94,7 @@ func TestFanOut(t *testing.T) {
 	}
 
 	// Publish a message
-	msg := *message.NewMessage([]byte("fanout message"))
-	topic.Publish(msg)
+	topic.Publish([]byte("fanout message"))
 
 	// Check message is stored
 	topic.mu.Lock()
@@ -106,15 +110,15 @@ func TestFanOut(t *testing.T) {
 }
 
 func TestConcurrentOperations(t *testing.T) {
-	topic := NewTopic("test")
+	dataDir := t.TempDir()
+	topic := NewTopic("test", dataDir)
 
 	done := make(chan bool)
 
 	// Concurrent publishes
 	go func() {
 		for i := 0; i < 100; i++ {
-			msg := *message.NewMessage([]byte("msg"))
-			topic.Publish(msg)
+			topic.Publish([]byte("msg"))
 		}
 		done <- true
 	}()
@@ -125,6 +129,7 @@ func TestConcurrentOperations(t *testing.T) {
 			sub := &client.Subscriber{
 				Offsets:          make(map[string]int),
 				SubscribedTopics: make(map[string]bool),
+				LastAckedID:      make(map[string]uint64),
 			}
 			sub.Active.Store(true)
 			topic.AddSubscriber(sub)

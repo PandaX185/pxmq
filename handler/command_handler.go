@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"pxmq/broker"
 	"pxmq/client"
-	"pxmq/message"
 	"pxmq/parser"
+	"strconv"
 )
 
 func handleCommand(c *client.Subscriber, b *broker.Broker, cmd *parser.Command) string {
@@ -20,7 +20,7 @@ func handleCommand(c *client.Subscriber, b *broker.Broker, cmd *parser.Command) 
 
 		topicName := cmd.Args[0]
 		t := b.GetOrCreateTopic(topicName)
-		t.Publish(*message.NewMessage(cmd.Payload))
+		t.Publish(cmd.Payload)
 
 		return "+OK\n"
 	case "SUB":
@@ -53,6 +53,20 @@ func handleCommand(c *client.Subscriber, b *broker.Broker, cmd *parser.Command) 
 				t.Unsubscribe(c)
 			}
 		}
+		return "+OK\n"
+	case "ACK":
+		if len(cmd.Args) < 2 {
+			return "-ERR ACK requires topic and message ID\n"
+		}
+
+		topicName := cmd.Args[0]
+		msgIDStr := cmd.Args[1]
+		msgID, err := strconv.ParseUint(msgIDStr, 10, 64)
+		if err != nil {
+			return "-ERR Invalid message ID\n"
+		}
+
+		c.Ack(topicName, msgID)
 		return "+OK\n"
 	default:
 		return fmt.Sprintf("-ERR Unknown command: %s\n", cmd.Type)

@@ -6,7 +6,7 @@ import (
 
 func TestNewMessage(t *testing.T) {
 	payload := []byte("test payload")
-	msg := NewMessage(payload)
+	msg := NewMessage(1, payload)
 
 	if msg == nil {
 		t.Fatal("NewMessage returned nil")
@@ -14,8 +14,8 @@ func TestNewMessage(t *testing.T) {
 	if string(msg.Payload) != string(payload) {
 		t.Errorf("Expected payload %s, got %s", payload, msg.Payload)
 	}
-	if msg.ID == "" {
-		t.Fatal("ID not set")
+	if msg.ID != 1 {
+		t.Errorf("Expected ID 1, got %d", msg.ID)
 	}
 }
 

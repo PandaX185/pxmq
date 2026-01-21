@@ -16,17 +16,21 @@ func HandleClient(conn net.Conn, broker *broker.Broker) {
 	defer func() {
 		subscriber.Active.Store(false)
 		broker.UnsubscribeAll(subscriber)
-		close(subscriber.WriteCh)
+		close(subscriber.MessageCh)
 		conn.Close()
 	}()
 
 	reader := bufio.NewReader(conn)
-	for {
+	for subscriber.Active.Load() {
 		cmd, err := parser.ParseCommand(reader)
 		if err != nil {
 			if err == io.EOF {
-				fmt.Println("Client disconnected")
-				return
+				if len(subscriber.SubscribedTopics) == 0 {
+					fmt.Println("Client disconnected")
+					return
+				}
+
+				continue
 			}
 			if err.Error() == "empty line" {
 				continue

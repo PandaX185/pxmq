@@ -36,8 +36,8 @@ func ParseCommand(r *bufio.Reader) (*Command, error) {
 
 	switch cmd.Type {
 	case "PUB":
-		if len(parts) < 3 {
-			return nil, fmt.Errorf("PUB requires topic and length")
+		if len(parts) != 3 {
+			return nil, fmt.Errorf("PUB command syntax: PUB <topic> <len>")
 		}
 		cmd.Args = []string{parts[1]}
 		length, err := strconv.Atoi(parts[2])
@@ -50,22 +50,25 @@ func ParseCommand(r *bufio.Reader) (*Command, error) {
 			return nil, err
 		}
 		cmd.Payload = payload
-
-	case "SUB", "UNSUB":
-		if len(parts) < 2 {
+		return cmd, nil
+	case "SUB", "UNSUB", "ACK":
+		if cmd.Type == "ACK" {
+			if len(parts) != 3 {
+				return nil, fmt.Errorf("ACK command syntax: ACK <topic> <msgID>")
+			}
+		} else if len(parts) < 2 {
 			return nil, fmt.Errorf("%s requires topics", cmd.Type)
 		}
 
-		if cmd.Type == "SUB" && parts[len(parts)-1] == "*" {
+		if cmd.Type == "SUB" && len(parts) > 2 && parts[len(parts)-1] == "*" {
 			cmd.Args = parts[1 : len(parts)-1]
 			cmd.Args = append(cmd.Args, "*")
 		} else {
 			cmd.Args = parts[1:]
 		}
 
+		return cmd, nil
 	default:
 		return nil, fmt.Errorf("unknown command: %s", cmd.Type)
 	}
-
-	return cmd, nil
 }

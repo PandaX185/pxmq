@@ -74,6 +74,7 @@ pxmq uses a binary-safe TCP protocol with length-prefixed payloads.
 - `PUB <topic> <len>\n<payload>` - Publish a message to a topic
 - `SUB <topics> [*]\n` - Subscribe to topics (use `*` for replay of old messages)
 - `UNSUB <topics>\n` - Unsubscribe from topics
+- `ACK <topic> <msgID>\n` - Acknowledge receipt of a message (optional)
 
 ### Server Responses
 
@@ -82,7 +83,7 @@ pxmq uses a binary-safe TCP protocol with length-prefixed payloads.
 
 ### Server Push
 
-- `MSG <topic> <len>\n<payload>` - Incoming message from subscribed topic
+- `MSG <topic> <msgID> <len>\n<payload>` - Incoming message from subscribed topic
 
 ## Client Examples
 
@@ -131,12 +132,15 @@ func main() {
 	for scanner.Scan() {
 		line := scanner.Text()
 		if strings.HasPrefix(line, "MSG ") {
-			// Parse MSG command
+			// Parse MSG command: MSG <topic> <msgID> <len>
 			parts := strings.Split(line, " ")
-			if len(parts) >= 3 {
+			if len(parts) >= 4 {
 				topic := parts[1]
+				msgID := parts[2]
 				// In real implementation, parse length and read payload
-				fmt.Printf("Received message on topic %s\n", topic)
+				fmt.Printf("Received message on topic %s with ID %s\n", topic, msgID)
+				// Optional: Send ACK
+				fmt.Fprintf(conn, "ACK %s %s\n", topic, msgID)
 			}
 		}
 	}
@@ -163,7 +167,14 @@ client.on('data', (data) => {
     const payload = 'Hello from Node.js!';
     client.write(`PUB mytopic ${payload.length}\n${payload}`);
   } else if (message.startsWith('MSG ')) {
-    console.log('Received message:', message.trim());
+    const parts = message.trim().split(' ');
+    if (parts.length >= 4) {
+      const topic = parts[1];
+      const msgID = parts[2];
+      console.log('Received message on topic', topic, 'with ID', msgID);
+      // Optional: Send ACK
+      client.write(`ACK ${topic} ${msgID}\n`);
+    }
   } else if (message.startsWith('-ERR')) {
     console.error('Error:', message.trim());
   }
@@ -207,8 +218,15 @@ public class PxmqClient {
             String line;
             while ((line = in.readLine()) != null) {
                 if (line.startsWith("MSG ")) {
-                    // Parse MSG command - in real implementation, read the payload
-                    System.out.println("Received message: " + line);
+                    // Parse MSG command: MSG <topic> <msgID> <len>
+                    String[] parts = line.split(" ");
+                    if (parts.length >= 4) {
+                        String topic = parts[1];
+                        String msgID = parts[2];
+                        System.out.println("Received message on topic " + topic + " with ID " + msgID);
+                        // Optional: Send ACK
+                        out.println("ACK " + topic + " " + msgID);
+                    }
                 } else {
                     System.out.println("Response: " + line);
                 }
@@ -244,7 +262,13 @@ def receive_messages(sock):
                     payload = 'Hello from Python!'
                     sock.sendall(f'PUB mytopic {len(payload)}\n{payload}'.encode('utf-8'))
                 elif line.startswith('MSG '):
-                    print('Received message:', line.strip())
+                    parts = line.strip().split(' ')
+                    if len(parts) >= 4:
+                        topic = parts[1]
+                        msg_id = parts[2]
+                        print('Received message on topic', topic, 'with ID', msg_id)
+                        # Optional: Send ACK
+                        sock.sendall(f'ACK {topic} {msg_id}\n'.encode('utf-8'))
                 elif line.startswith('-ERR'):
                     print('Error:', line.strip())
         except Exception as e:
