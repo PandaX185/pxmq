@@ -52,6 +52,8 @@ func handleCommand(c *client.Subscriber, b *broker.Broker, cmd string, args []st
 			t.Unsubscribe(c)
 		}
 		return "OK\n"
+	case "MESSAGE":
+		return ""
 	default:
 		return fmt.Sprintf("UNKNOWN COMMAND: %s\n", cmd)
 	}

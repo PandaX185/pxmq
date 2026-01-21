@@ -9,7 +9,7 @@ import (
 	"pxmq/parser"
 )
 
-func HandleClient(conn *net.TCPConn, broker *broker.Broker) {
+func HandleClient(conn net.Conn, broker *broker.Broker) {
 	subscriber := client.NewSubscriber(conn)
 	defer func() {
 		subscriber.Active.Store(false)

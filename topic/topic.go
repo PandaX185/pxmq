@@ -50,7 +50,7 @@ func (t *Topic) Consume(sub *client.Subscriber, replay bool) {
 		msg := t.messages[sub.Offsets[t.Name]]
 		sub.Offsets[t.Name]++
 
-		data := fmt.Sprintf("%s %s\n", t.Name, msg.String())
+		data := fmt.Sprintf("MESSAGE %s %s\n", t.Name, msg.String())
 
 		t.mu.Unlock()
 		sub.WriteCh <- []byte(data)

@@ -7,7 +7,7 @@ import (
 )
 
 type Subscriber struct {
-	Conn             *net.TCPConn
+	Conn             net.Conn
 	Active           atomic.Bool
 	Offsets          map[string]int
 	WriteCh          chan []byte
@@ -15,7 +15,7 @@ type Subscriber struct {
 	mu               sync.Mutex
 }
 
-func NewSubscriber(conn *net.TCPConn) *Subscriber {
+func NewSubscriber(conn net.Conn) *Subscriber {
 	sub := &Subscriber{
 		Conn:             conn,
 		Active:           atomic.Bool{},
@@ -23,6 +23,7 @@ func NewSubscriber(conn *net.TCPConn) *Subscriber {
 		WriteCh:          make(chan []byte, 100),
 		SubscribedTopics: make(map[string]bool),
 	}
+	sub.Active.Store(true)
 
 	go func() {
 		for data := range sub.WriteCh {
